@@ -30,8 +30,5 @@ func script1() {
 func main() {
 	RegisterFlags()
 
-	TestContext.DesiredConcurrency = 50
-	TestContext.TestDuration = 300
-	TestContext.SleepSeconds = 10
-	RunTest("results.csv")
+	script1()
 }

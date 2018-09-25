@@ -60,7 +60,7 @@ func RegisterFlags() {
 // SetUpProvider sets up the fn provider config
 func SetUpProvider() *FnProviderSetUp {
 	config := provider.NewConfigSourceFromMap(map[string]string{
-		"api-url": "https://localhost:8080",
+		"api-url":               "https://localhost:8080",
 	})
 	currentProvider, err := fn_go.DefaultProviders.ProviderFromConfig("default", config, &provider.NopPassPhraseSource{})
 	if err != nil {
@@ -125,13 +125,11 @@ func (f *FnProviderSetUp) deploySleepFn() {
 }
 
 func (f *FnProviderSetUp) callSleepFn(i int, invokeURL string, dataChan chan DataMetrics) {
-
 	log.Printf("Go routine %d started.\n", i+1)
 	transport := f.Provider.WrapCallTransport(http.DefaultTransport)
 	httpClient := http.Client{Transport: transport}
 
 	tNewRequest := time.Now()
-	tNewRequestMilli := tNewRequest.UnixNano() / int64(time.Millisecond)
 	log.Printf("New Request. Time now: %d:%d:%d\n", tNewRequest.Hour(), tNewRequest.Minute(), tNewRequest.Second())
 	// Create new request
 	req, err := http.NewRequest("POST", invokeURL, strings.NewReader(fmt.Sprintf(`{"seconds": %d}`, TestContext.SleepSeconds)))
@@ -144,13 +142,14 @@ func (f *FnProviderSetUp) callSleepFn(i int, invokeURL string, dataChan chan Dat
 	req = req.WithContext(f.Ctx)
 
 	response, err := httpClient.Do(req)
+	if response != nil {
+		defer response.Body.Close()
+	}
 
 	tEnd := time.Now()
-	tEndMilli := tEnd.UnixNano() / int64(time.Millisecond)
 	log.Printf("Post request completed. Time now: %d:%d:%d\n", tEnd.Hour(), tEnd.Minute(), tEnd.Second())
 
-	tElapsed := tEndMilli - tNewRequestMilli
-
+	tElapsed := tEnd.Sub(tNewRequest).Round(time.Millisecond) / time.Millisecond
 	var statusOrErr string
 	success := true
 	if err != nil {
@@ -165,7 +164,7 @@ func (f *FnProviderSetUp) callSleepFn(i int, invokeURL string, dataChan chan Dat
 	}
 
 	log.Printf("Go routine %d ended.\n", i+1)
-	dataChan <- DataMetrics{goRoutineMetric: strconv.Itoa(i + 1), elapsedTime: strconv.FormatInt(tElapsed, 10), success: success, status: statusOrErr}
+	dataChan <- DataMetrics{goRoutineMetric: strconv.Itoa(i + 1), elapsedTime: tElapsed.String(), success: success, status: statusOrErr}
 }
 
 // RunTest runs concurrent runs (TestContext.DesiredConcurrency) for a duration of time(TestContext.timeDuration)
@@ -210,7 +209,7 @@ func RunTest(fileName string) {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	writer.Write([]string{"test duration(sec.)", "concurrent runs", "fn sleep time(sec.)", "goroutine", "success", "status", "request duration"})
+	writer.Write([]string{"test duration(sec.)", "concurrent runs", "fn sleep time(sec.)", "goroutine", "success", "status", "request duration(milli sec.)"})
 	for d := range dataChan {
 		writer.Write([]string{
 			strconv.Itoa(TestContext.TestDuration),
